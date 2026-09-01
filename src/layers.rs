@@ -175,3 +175,164 @@ impl Layer for DefaultsLayer {
         Ok(self.values.clone())
     }
 }
+
+/// Layer backed by a YAML file or string.
+#[cfg(feature = "yaml")]
+pub struct YamlLayer {
+    value: serde_yaml::Value,
+}
+
+#[cfg(feature = "yaml")]
+impl YamlLayer {
+    /// Load a YAML file from the given path.
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
+        let content = std::fs::read_to_string(path.as_ref())?;
+        let value: serde_yaml::Value = serde_yaml::from_str(&content)?;
+        Ok(Self { value })
+    }
+
+    /// Parse a YAML string directly.
+    pub fn from_str(content: &str) -> Result<Self> {
+        let value: serde_yaml::Value = serde_yaml::from_str(content)?;
+        Ok(Self { value })
+    }
+}
+
+#[cfg(feature = "yaml")]
+impl Layer for YamlLayer {
+    fn name(&self) -> &str {
+        "yaml"
+    }
+
+    fn json(&self) -> Result<serde_json::Value> {
+        let json_str = serde_json::to_string(&self.value)?;
+        let value: serde_json::Value = serde_json::from_str(&json_str)?;
+        Ok(value)
+    }
+}
+
+/// Layer backed by a dotenv (.env) file.
+#[cfg(feature = "dotenv")]
+pub struct DotenvLayer {
+    vars: HashMap<String, String>,
+    separator: String,
+}
+
+#[cfg(feature = "dotenv")]
+impl DotenvLayer {
+    /// Load a dotenv file from the given path.
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
+        let iter = dotenvy::from_path_iter(path.as_ref())?;
+        let mut vars = HashMap::new();
+        for result in iter {
+            let (key, value) = result?;
+            vars.insert(key, value);
+        }
+        Ok(Self {
+            vars,
+            separator: "__".to_string(),
+        })
+    }
+
+    /// Load the `.env` file from the current directory.
+    pub fn new() -> Result<Self> {
+        let iter = dotenvy::dotenv_iter()?;
+        let mut vars = HashMap::new();
+        for result in iter {
+            let (key, value) = result?;
+            vars.insert(key, value);
+        }
+        Ok(Self {
+            vars,
+            separator: "__".to_string(),
+        })
+    }
+
+    /// Create a `DotenvLayer` from an explicit map of variables.
+    pub fn from_map(vars: HashMap<String, String>) -> Self {
+        Self {
+            vars,
+            separator: "__".to_string(),
+        }
+    }
+
+    /// Set the separator used to split flat env var names into nested JSON paths.
+    /// Default is `"__"` (double underscore).
+    pub fn with_separator(mut self, sep: impl Into<String>) -> Self {
+        self.separator = sep.into();
+        self
+    }
+}
+
+#[cfg(feature = "dotenv")]
+impl Layer for DotenvLayer {
+    fn name(&self) -> &str {
+        "dotenv"
+    }
+
+    fn json(&self) -> Result<serde_json::Value> {
+        let mut root = serde_json::Map::new();
+        for (key, value) in &self.vars {
+            let json_value = serde_json::from_str(value)
+                .unwrap_or_else(|_| serde_json::Value::String(value.clone()));
+            let parts: Vec<String> = key
+                .split(self.separator.as_str())
+                .map(|s| s.to_lowercase())
+                .collect();
+            let parts: Vec<&str> = parts.iter().map(|s| s.as_str()).collect();
+            insert_nested(&mut root, &parts, json_value);
+        }
+        Ok(serde_json::Value::Object(root))
+    }
+}
+
+/// Layer that reads configuration from clap `ArgMatches`.
+#[cfg(feature = "clap")]
+pub struct CliLayer {
+    values: serde_json::Value,
+}
+
+#[cfg(feature = "clap")]
+impl CliLayer {
+    /// Create a `CliLayer` from clap `ArgMatches`.
+    ///
+    /// All present arguments are included. Bool flags that are set
+    /// become `true`; other values are converted to JSON via their
+    /// `Display` implementation (attempting JSON parse first).
+    pub fn new(matches: &clap::ArgMatches) -> Self {
+        let mut map = serde_json::Map::new();
+        for id in matches.ids() {
+            let key = id.as_str().to_string();
+            if let Some(mut raw) = matches.get_raw(id.as_str()) {
+                let val = raw
+                    .next()
+                    .map(|os| os.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let json_value: serde_json::Value = serde_json::from_str(&val)
+                    .unwrap_or(serde_json::Value::String(val));
+                map.insert(key, json_value);
+            } else {
+                map.insert(key, serde_json::Value::Bool(true));
+            }
+        }
+        Self {
+            values: serde_json::Value::Object(map),
+        }
+    }
+
+    /// Create a `CliLayer` from a JSON value directly.
+    pub fn from_json(value: serde_json::Value) -> Self {
+        Self { values: value }
+    }
+}
+
+#[cfg(feature = "clap")]
+impl Layer for CliLayer {
+    fn name(&self) -> &str {
+        "cli"
+    }
+
+    fn json(&self) -> Result<serde_json::Value> {
+        Ok(self.values.clone())
+    }
+}

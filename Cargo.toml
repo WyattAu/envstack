@@ -10,11 +10,20 @@ keywords = ["config", "configuration", "env", "toml", "layered"]
 categories = ["config", "parser-implementations"]
 exclude = ["/target"]
 
+[features]
+default = []
+yaml = ["dep:serde_yaml"]
+dotenv = ["dep:dotenvy"]
+clap = ["dep:clap"]
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
 thiserror = "2"
+serde_yaml = { version = "0.9", optional = true }
+dotenvy = { version = "0.15", optional = true }
+clap = { version = "4", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

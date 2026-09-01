@@ -47,6 +47,16 @@ pub enum ConfigError {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
+    /// A YAML parsing error.
+    #[cfg(feature = "yaml")]
+    #[error("YAML parse error: {0}")]
+    Yaml(#[from] serde_yaml::Error),
+
+    /// A dotenv parsing error.
+    #[cfg(feature = "dotenv")]
+    #[error("dotenv error: {0}")]
+    Dotenv(#[from] dotenvy::Error),
+
     /// A custom error message.
     #[error("{0}")]
     Custom(String),

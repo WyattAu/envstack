@@ -32,6 +32,12 @@ pub mod layers;
 
 pub use error::{ConfigError, Result};
 pub use layers::{DefaultsLayer, EnvLayer, Layer, TomlLayer};
+#[cfg(feature = "yaml")]
+pub use layers::YamlLayer;
+#[cfg(feature = "dotenv")]
+pub use layers::DotenvLayer;
+#[cfg(feature = "clap")]
+pub use layers::CliLayer;
 
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
@@ -167,6 +173,88 @@ impl ConfigStack {
         let layer = TomlLayer::from_str(content)?;
         self.layers.push(Box::new(layer));
         Ok(self)
+    }
+
+    /// Add a YAML file as a configuration layer (lenient).
+    ///
+    /// If the file does not exist, the layer is silently skipped.
+    /// Use [`with_yaml_file_strict`](Self::with_yaml_file_strict)
+    /// to error on missing files.
+    #[cfg(feature = "yaml")]
+    pub fn with_yaml_file(mut self, path: impl AsRef<std::path::Path>) -> Self {
+        if let Ok(layer) = YamlLayer::from_file(path) {
+            self.layers.push(Box::new(layer));
+        }
+        self
+    }
+
+    /// Add a YAML file as a configuration layer (strict).
+    ///
+    /// Returns an error if the file cannot be read or parsed.
+    #[cfg(feature = "yaml")]
+    pub fn with_yaml_file_strict(
+        mut self,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<Self> {
+        let layer = YamlLayer::from_file(path)?;
+        self.layers.push(Box::new(layer));
+        Ok(self)
+    }
+
+    /// Add a raw YAML string as a configuration layer.
+    #[cfg(feature = "yaml")]
+    pub fn with_yaml_str(mut self, content: &str) -> Result<Self> {
+        let layer = YamlLayer::from_str(content)?;
+        self.layers.push(Box::new(layer));
+        Ok(self)
+    }
+
+    /// Add a dotenv (.env) file as a configuration layer (lenient).
+    ///
+    /// If the file does not exist, the layer is silently skipped.
+    /// Use [`with_dotenv_strict`](Self::with_dotenv_strict)
+    /// to error on missing files.
+    #[cfg(feature = "dotenv")]
+    pub fn with_dotenv(mut self, path: impl AsRef<std::path::Path>) -> Self {
+        if let Ok(layer) = DotenvLayer::from_file(path) {
+            self.layers.push(Box::new(layer));
+        }
+        self
+    }
+
+    /// Add a dotenv (.env) file as a configuration layer (strict).
+    ///
+    /// Returns an error if the file cannot be read or parsed.
+    #[cfg(feature = "dotenv")]
+    pub fn with_dotenv_strict(
+        mut self,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<Self> {
+        let layer = DotenvLayer::from_file(path)?;
+        self.layers.push(Box::new(layer));
+        Ok(self)
+    }
+
+    /// Add the `.env` file from the current directory as a configuration layer.
+    #[cfg(feature = "dotenv")]
+    pub fn with_dotenv_from_cwd(mut self) -> Result<Self> {
+        let layer = DotenvLayer::new()?;
+        self.layers.push(Box::new(layer));
+        Ok(self)
+    }
+
+    /// Add a dotenv layer from an explicit map of variables.
+    #[cfg(feature = "dotenv")]
+    pub fn with_dotenv_map(mut self, vars: std::collections::HashMap<String, String>) -> Self {
+        self.layers.push(Box::new(DotenvLayer::from_map(vars)));
+        self
+    }
+
+    /// Add CLI arguments from clap `ArgMatches` as a configuration layer.
+    #[cfg(feature = "clap")]
+    pub fn with_clap(mut self, matches: &clap::ArgMatches) -> Self {
+        self.layers.push(Box::new(CliLayer::new(matches)));
+        self
     }
 
     /// Add a default value at a dot-separated key path.
@@ -1180,5 +1268,358 @@ mod tests {
         let stack = ConfigStack::default();
         let merged = stack.merge().unwrap();
         assert_eq!(merged, serde_json::json!({}));
+    }
+
+    // ---- YAML layer tests ----
+
+    #[test]
+    #[cfg(feature = "yaml")]
+    fn yaml_layer_from_str() {
+        let yaml_content = r#"
+server:
+  host: "0.0.0.0"
+  port: 3000
+"#;
+        let layer = layers::YamlLayer::from_str(yaml_content).unwrap();
+        let json = layer.json().unwrap();
+
+        let server = json.get("server").unwrap();
+        assert_eq!(
+            server.get("host"),
+            Some(&serde_json::Value::String("0.0.0.0".into()))
+        );
+        assert_eq!(server.get("port"), Some(&serde_json::json!(3000)));
+    }
+
+    #[test]
+    #[cfg(feature = "yaml")]
+    fn yaml_layer_preserves_types() {
+        let yaml_content = r#"
+string_val: "hello"
+int_val: 42
+float_val: 3.14
+bool_val: true
+"#;
+        let layer = layers::YamlLayer::from_str(yaml_content).unwrap();
+        let json = layer.json().unwrap();
+
+        assert!(json.get("string_val").unwrap().is_string());
+        assert!(json.get("int_val").unwrap().is_number());
+        assert!(json.get("float_val").unwrap().is_number());
+        assert!(json.get("bool_val").unwrap().is_boolean());
+    }
+
+    #[test]
+    #[cfg(feature = "yaml")]
+    fn yaml_layer_name() {
+        let layer = layers::YamlLayer::from_str("key: value").unwrap();
+        assert_eq!(layer.name(), "yaml");
+    }
+
+    #[test]
+    #[cfg(feature = "yaml")]
+    fn yaml_layer_arrays() {
+        let yaml_content = r#"
+hosts:
+  - "a"
+  - "b"
+  - "c"
+ports:
+  - 80
+  - 443
+  - 8080
+"#;
+        let layer = layers::YamlLayer::from_str(yaml_content).unwrap();
+        let json = layer.json().unwrap();
+
+        let hosts = json.get("hosts").unwrap().as_array().unwrap();
+        assert_eq!(hosts.len(), 3);
+        assert_eq!(hosts[0], serde_json::Value::String("a".into()));
+
+        let ports = json.get("ports").unwrap().as_array().unwrap();
+        assert_eq!(ports.len(), 3);
+        assert_eq!(ports[0], serde_json::json!(80));
+    }
+
+    #[test]
+    #[cfg(feature = "yaml")]
+    fn yaml_layer_from_file() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join("envstack_test_yaml");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.yaml");
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, "name: testapp\nport: 9090").unwrap();
+
+        let config: serde_json::Value = ConfigStack::new()
+            .with_yaml_file(&path)
+            .extract()
+            .unwrap();
+
+        assert_eq!(
+            config.get("name"),
+            Some(&serde_json::Value::String("testapp".into()))
+        );
+        assert_eq!(config.get("port"), Some(&serde_json::json!(9090)));
+
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "yaml")]
+    fn yaml_layer_from_file_nonexistent_lenient() {
+        let result = ConfigStack::new()
+            .with_yaml_file("/nonexistent/path.yaml")
+            .extract::<serde_json::Value>();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    #[cfg(feature = "yaml")]
+    fn yaml_layer_from_file_nonexistent_strict() {
+        let result = ConfigStack::new()
+            .with_yaml_file_strict("/nonexistent/path.yaml");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "yaml")]
+    fn yaml_layer_invalid_syntax() {
+        let result = layers::YamlLayer::from_str("invalid: yaml: content: {{");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "yaml")]
+    fn config_stack_yaml_priority() {
+        let yaml_content = r#"
+host: "from-yaml"
+port: 3000
+"#;
+        let config: serde_json::Value = ConfigStack::new()
+            .with_yaml_str(yaml_content)
+            .unwrap()
+            .with_default("host", "from-default")
+            .with_default("port", serde_json::json!(0))
+            .extract()
+            .unwrap();
+
+        assert_eq!(
+            config.get("host"),
+            Some(&serde_json::Value::String("from-yaml".into()))
+        );
+        assert_eq!(config.get("port"), Some(&serde_json::json!(3000)));
+    }
+
+    // ---- Dotenv layer tests ----
+
+    #[test]
+    #[cfg(feature = "dotenv")]
+    fn dotenv_layer_from_map() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("HOST".into(), "localhost".into());
+        vars.insert("PORT".into(), "8080".into());
+
+        let layer = layers::DotenvLayer::from_map(vars);
+        let json = layer.json().unwrap();
+
+        assert_eq!(
+            json.get("host"),
+            Some(&serde_json::Value::String("localhost".into()))
+        );
+        assert_eq!(json.get("port"), Some(&serde_json::json!(8080)));
+    }
+
+    #[test]
+    #[cfg(feature = "dotenv")]
+    fn dotenv_layer_name() {
+        let layer = layers::DotenvLayer::from_map(std::collections::HashMap::new());
+        assert_eq!(layer.name(), "dotenv");
+    }
+
+    #[test]
+    #[cfg(feature = "dotenv")]
+    fn dotenv_layer_from_file() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join("envstack_test_dotenv");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.env");
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, "HOST=localhost\nPORT=9090\nDEBUG=true").unwrap();
+
+        let config: serde_json::Value = ConfigStack::new()
+            .with_dotenv(&path)
+            .extract()
+            .unwrap();
+
+        assert_eq!(
+            config.get("host"),
+            Some(&serde_json::Value::String("localhost".into()))
+        );
+        assert_eq!(config.get("port"), Some(&serde_json::json!(9090)));
+        assert_eq!(config.get("debug"), Some(&serde_json::json!(true)));
+
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "dotenv")]
+    fn dotenv_layer_from_file_nonexistent_lenient() {
+        let result = ConfigStack::new()
+            .with_dotenv("/nonexistent/path.env")
+            .extract::<serde_json::Value>();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    #[cfg(feature = "dotenv")]
+    fn dotenv_layer_from_file_nonexistent_strict() {
+        let result = ConfigStack::new()
+            .with_dotenv_strict("/nonexistent/path.env");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "dotenv")]
+    fn dotenv_layer_with_dotenv_map() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("HOST".into(), "10.0.0.1".into());
+        vars.insert("PORT".into(), "3000".into());
+
+        let config: serde_json::Value = ConfigStack::new()
+            .with_dotenv_map(vars)
+            .extract()
+            .unwrap();
+
+        assert_eq!(
+            config.get("host"),
+            Some(&serde_json::Value::String("10.0.0.1".into()))
+        );
+        assert_eq!(config.get("port"), Some(&serde_json::json!(3000)));
+    }
+
+    #[test]
+    #[cfg(feature = "dotenv")]
+    fn dotenv_layer_priority() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("host".into(), "from-dotenv".into());
+
+        let config: serde_json::Value = ConfigStack::new()
+            .with_dotenv_map(vars)
+            .with_default("host", "from-default")
+            .extract()
+            .unwrap();
+
+        assert_eq!(
+            config.get("host"),
+            Some(&serde_json::Value::String("from-dotenv".into()))
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "dotenv")]
+    fn dotenv_layer_nested_key() {
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("SERVER__HOST".into(), "localhost".into());
+        vars.insert("SERVER__PORT".into(), "8080".into());
+
+        let layer = layers::DotenvLayer::from_map(vars);
+        let json = layer.json().unwrap();
+
+        let server = json.get("server").unwrap();
+        assert_eq!(
+            server.get("host"),
+            Some(&serde_json::Value::String("localhost".into()))
+        );
+        assert_eq!(server.get("port"), Some(&serde_json::json!(8080)));
+    }
+
+    // ---- CLI layer tests ----
+
+    #[test]
+    #[cfg(feature = "clap")]
+    fn cli_layer_from_json() {
+        let json = serde_json::json!({
+            "host": "localhost",
+            "port": 8080,
+            "verbose": true
+        });
+        let layer = layers::CliLayer::from_json(json);
+        let result = layer.json().unwrap();
+
+        assert_eq!(
+            result.get("host"),
+            Some(&serde_json::Value::String("localhost".into()))
+        );
+        assert_eq!(result.get("port"), Some(&serde_json::json!(8080)));
+        assert_eq!(result.get("verbose"), Some(&serde_json::json!(true)));
+    }
+
+    #[test]
+    #[cfg(feature = "clap")]
+    fn cli_layer_name() {
+        let layer = layers::CliLayer::from_json(serde_json::json!({}));
+        assert_eq!(layer.name(), "cli");
+    }
+
+    #[test]
+    #[cfg(feature = "clap")]
+    fn cli_layer_with_clap() {
+        use clap::Command;
+
+        let matches = Command::new("test")
+            .arg(clap::arg!(--host <HOST>).default_value("localhost"))
+            .arg(clap::arg!(--port <PORT>))
+            .arg(clap::arg!(--verbose).action(clap::ArgAction::SetTrue))
+            .get_matches_from(["test", "--host", "10.0.0.1", "--port", "3000", "--verbose"]);
+
+        let config: serde_json::Value = ConfigStack::new()
+            .with_clap(&matches)
+            .extract()
+            .unwrap();
+
+        assert_eq!(
+            config.get("host"),
+            Some(&serde_json::Value::String("10.0.0.1".into()))
+        );
+        assert_eq!(config.get("port"), Some(&serde_json::json!(3000)));
+        assert_eq!(config.get("verbose"), Some(&serde_json::json!(true)));
+    }
+
+    #[test]
+    #[cfg(feature = "clap")]
+    fn cli_layer_priority_over_defaults() {
+        use clap::Command;
+
+        let matches = Command::new("test")
+            .arg(clap::arg!(--host <HOST>).default_value("from-cli"))
+            .get_matches_from(["test", "--host", "from-cli"]);
+
+        let config: serde_json::Value = ConfigStack::new()
+            .with_clap(&matches)
+            .with_default("host", "from-default")
+            .extract()
+            .unwrap();
+
+        assert_eq!(
+            config.get("host"),
+            Some(&serde_json::Value::String("from-cli".into()))
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "clap")]
+    fn cli_layer_numeric_json_parsing() {
+        use clap::Command;
+
+        let matches = Command::new("test")
+            .arg(clap::arg!(--count <N>))
+            .get_matches_from(["test", "--count", "42"]);
+
+        let layer = layers::CliLayer::new(&matches);
+        let json = layer.json().unwrap();
+
+        // "42" is valid JSON, so it parses as a number
+        assert_eq!(json.get("count"), Some(&serde_json::json!(42)));
     }
 }
