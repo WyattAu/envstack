@@ -1,25 +1,37 @@
-use std::fmt;
-
 /// Errors that can occur when working with `envstack`.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     /// A required configuration field is missing.
     #[error("missing required field: `{field}`")]
     MissingField {
+        /// Name of the missing field.
         field: String,
     },
 
     /// Failed to parse a configuration value.
     #[error("parse error in `{field}`: {message}")]
     ParseError {
+        /// Field that failed to parse.
         field: String,
+        /// Parse error message.
         message: String,
     },
 
     /// A configuration value failed validation.
     #[error("validation failed for `{field}`: {message}")]
     ValidationError {
+        /// Field that failed validation.
         field: String,
+        /// Validation error message.
+        message: String,
+    },
+
+    /// A configuration layer failed to load.
+    #[error("layer `{layer}` failed: {message}")]
+    LayerError {
+        /// Name of the failing layer.
+        layer: String,
+        /// Error message.
         message: String,
     },
 
@@ -31,9 +43,13 @@ pub enum ConfigError {
     #[error("TOML parse error: {0}")]
     Toml(#[from] toml::de::Error),
 
-    /// A JSON parsing error.
+    /// A JSON error.
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
+
+    /// A custom error message.
+    #[error("{0}")]
+    Custom(String),
 }
 
 /// A specialized `Result` type for `envstack` operations.

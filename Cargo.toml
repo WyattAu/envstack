@@ -1,30 +1,23 @@
 [package]
 name = "envstack"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
-description = "Layered configuration for Rust — environment variables, TOML files, and CLI args with type-safe extraction and validation"
+description = "Layered configuration for Rust — environment variables, TOML files, CLI args with type-safe extraction"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/WyattAu/envstack"
 keywords = ["config", "configuration", "env", "toml", "layered"]
 categories = ["config", "parser-implementations"]
+exclude = ["/target"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-toml = { version = "0.8", optional = true }
-thiserror = "2"
 serde_json = "1"
-
-clap = { version = "4", optional = true, features = ["derive"] }
-validator = { version = "0.18", optional = true }
-dotenvy = { version = "0.15", optional = true }
+toml = "0.8"
+thiserror = "2"
 
 [dev-dependencies]
-serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
-[features]
-default = ["toml", "env"]
-toml = ["dep:toml"]
-env = ["dep:dotenvy"]
-clap = ["dep:clap"]
-validate = ["dep:validator"]
+[lints.rust]
+unsafe_code = "forbid"
