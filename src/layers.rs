@@ -308,8 +308,8 @@ impl CliLayer {
                     .next()
                     .map(|os| os.to_string_lossy().to_string())
                     .unwrap_or_default();
-                let json_value: serde_json::Value = serde_json::from_str(&val)
-                    .unwrap_or(serde_json::Value::String(val));
+                let json_value: serde_json::Value =
+                    serde_json::from_str(&val).unwrap_or(serde_json::Value::String(val));
                 map.insert(key, json_value);
             } else {
                 map.insert(key, serde_json::Value::Bool(true));

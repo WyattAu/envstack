@@ -31,13 +31,13 @@ pub mod error;
 pub mod layers;
 
 pub use error::{ConfigError, Result};
-pub use layers::{DefaultsLayer, EnvLayer, Layer, TomlLayer};
-#[cfg(feature = "yaml")]
-pub use layers::YamlLayer;
-#[cfg(feature = "dotenv")]
-pub use layers::DotenvLayer;
 #[cfg(feature = "clap")]
 pub use layers::CliLayer;
+#[cfg(feature = "dotenv")]
+pub use layers::DotenvLayer;
+#[cfg(feature = "yaml")]
+pub use layers::YamlLayer;
+pub use layers::{DefaultsLayer, EnvLayer, Layer, TomlLayer};
 
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
@@ -159,10 +159,7 @@ impl ConfigStack {
     /// Add a TOML file as a configuration layer (strict).
     ///
     /// Returns an error if the file cannot be read or parsed.
-    pub fn with_toml_file_strict(
-        mut self,
-        path: impl AsRef<std::path::Path>,
-    ) -> Result<Self> {
+    pub fn with_toml_file_strict(mut self, path: impl AsRef<std::path::Path>) -> Result<Self> {
         let layer = TomlLayer::from_file(path)?;
         self.layers.push(Box::new(layer));
         Ok(self)
@@ -192,10 +189,7 @@ impl ConfigStack {
     ///
     /// Returns an error if the file cannot be read or parsed.
     #[cfg(feature = "yaml")]
-    pub fn with_yaml_file_strict(
-        mut self,
-        path: impl AsRef<std::path::Path>,
-    ) -> Result<Self> {
+    pub fn with_yaml_file_strict(mut self, path: impl AsRef<std::path::Path>) -> Result<Self> {
         let layer = YamlLayer::from_file(path)?;
         self.layers.push(Box::new(layer));
         Ok(self)
@@ -226,10 +220,7 @@ impl ConfigStack {
     ///
     /// Returns an error if the file cannot be read or parsed.
     #[cfg(feature = "dotenv")]
-    pub fn with_dotenv_strict(
-        mut self,
-        path: impl AsRef<std::path::Path>,
-    ) -> Result<Self> {
+    pub fn with_dotenv_strict(mut self, path: impl AsRef<std::path::Path>) -> Result<Self> {
         let layer = DotenvLayer::from_file(path)?;
         self.layers.push(Box::new(layer));
         Ok(self)
@@ -273,7 +264,9 @@ impl ConfigStack {
         let mut root = serde_json::Map::new();
         insert_nested(&mut root, &parts, value.into());
         self.layers
-            .push(Box::new(DefaultsLayer::new(serde_json::Value::Object(root))));
+            .push(Box::new(DefaultsLayer::new(serde_json::Value::Object(
+                root,
+            ))));
         self
     }
 
@@ -472,7 +465,9 @@ mod tests {
         let db = json.get("database").unwrap();
         assert_eq!(
             db.get("url"),
-            Some(&serde_json::Value::String("postgres://localhost/mydb".into()))
+            Some(&serde_json::Value::String(
+                "postgres://localhost/mydb".into()
+            ))
         );
         assert_eq!(db.get("pool_size"), Some(&serde_json::json!(10)));
     }
@@ -856,8 +851,7 @@ mod tests {
 
     #[test]
     fn config_stack_with_toml_file_strict_missing_returns_error() {
-        let result = ConfigStack::new()
-            .with_toml_file_strict("/nonexistent/path/config.toml");
+        let result = ConfigStack::new().with_toml_file_strict("/nonexistent/path/config.toml");
         match result {
             Err(err) => {
                 let msg = err.to_string();
@@ -884,10 +878,7 @@ mod tests {
         let mut f = std::fs::File::create(&path).unwrap();
         writeln!(f, "name = \"testapp\"\nport = 9090").unwrap();
 
-        let config: serde_json::Value = ConfigStack::new()
-            .with_toml_file(&path)
-            .extract()
-            .unwrap();
+        let config: serde_json::Value = ConfigStack::new().with_toml_file(&path).extract().unwrap();
 
         assert_eq!(
             config.get("name"),
@@ -918,10 +909,7 @@ mod tests {
             server: ServerConfig,
         }
 
-        let config: Config = ConfigStack::new()
-            .with_toml_file(&path)
-            .extract()
-            .unwrap();
+        let config: Config = ConfigStack::new().with_toml_file(&path).extract().unwrap();
 
         assert_eq!(
             config,
@@ -938,8 +926,7 @@ mod tests {
 
     #[test]
     fn config_stack_toml_invalid_syntax_strict() {
-        let result = ConfigStack::new()
-            .with_toml_str("this is not = [valid toml");
+        let result = ConfigStack::new().with_toml_str("this is not = [valid toml");
         assert!(result.is_err());
     }
 
@@ -947,8 +934,7 @@ mod tests {
 
     #[test]
     fn config_stack_defaults_deeply_nested() {
-        let stack = ConfigStack::new()
-            .with_default("a.b.c.d.e", serde_json::json!(42));
+        let stack = ConfigStack::new().with_default("a.b.c.d.e", serde_json::json!(42));
         let merged = stack.merge().unwrap();
         let a = merged.get("a").unwrap();
         let b = a.get("b").unwrap();
@@ -1220,8 +1206,7 @@ mod tests {
 
     #[test]
     fn config_stack_get_missing_key() {
-        let stack = ConfigStack::new()
-            .with_default("host", "localhost");
+        let stack = ConfigStack::new().with_default("host", "localhost");
         assert!(stack.get("missing").is_none());
     }
 
@@ -1351,10 +1336,7 @@ ports:
         let mut f = std::fs::File::create(&path).unwrap();
         writeln!(f, "name: testapp\nport: 9090").unwrap();
 
-        let config: serde_json::Value = ConfigStack::new()
-            .with_yaml_file(&path)
-            .extract()
-            .unwrap();
+        let config: serde_json::Value = ConfigStack::new().with_yaml_file(&path).extract().unwrap();
 
         assert_eq!(
             config.get("name"),
@@ -1377,8 +1359,7 @@ ports:
     #[test]
     #[cfg(feature = "yaml")]
     fn yaml_layer_from_file_nonexistent_strict() {
-        let result = ConfigStack::new()
-            .with_yaml_file_strict("/nonexistent/path.yaml");
+        let result = ConfigStack::new().with_yaml_file_strict("/nonexistent/path.yaml");
         assert!(result.is_err());
     }
 
@@ -1447,10 +1428,7 @@ port: 3000
         let mut f = std::fs::File::create(&path).unwrap();
         writeln!(f, "HOST=localhost\nPORT=9090\nDEBUG=true").unwrap();
 
-        let config: serde_json::Value = ConfigStack::new()
-            .with_dotenv(&path)
-            .extract()
-            .unwrap();
+        let config: serde_json::Value = ConfigStack::new().with_dotenv(&path).extract().unwrap();
 
         assert_eq!(
             config.get("host"),
@@ -1474,8 +1452,7 @@ port: 3000
     #[test]
     #[cfg(feature = "dotenv")]
     fn dotenv_layer_from_file_nonexistent_strict() {
-        let result = ConfigStack::new()
-            .with_dotenv_strict("/nonexistent/path.env");
+        let result = ConfigStack::new().with_dotenv_strict("/nonexistent/path.env");
         assert!(result.is_err());
     }
 
@@ -1486,10 +1463,7 @@ port: 3000
         vars.insert("HOST".into(), "10.0.0.1".into());
         vars.insert("PORT".into(), "3000".into());
 
-        let config: serde_json::Value = ConfigStack::new()
-            .with_dotenv_map(vars)
-            .extract()
-            .unwrap();
+        let config: serde_json::Value = ConfigStack::new().with_dotenv_map(vars).extract().unwrap();
 
         assert_eq!(
             config.get("host"),
@@ -1573,10 +1547,7 @@ port: 3000
             .arg(clap::arg!(--verbose).action(clap::ArgAction::SetTrue))
             .get_matches_from(["test", "--host", "10.0.0.1", "--port", "3000", "--verbose"]);
 
-        let config: serde_json::Value = ConfigStack::new()
-            .with_clap(&matches)
-            .extract()
-            .unwrap();
+        let config: serde_json::Value = ConfigStack::new().with_clap(&matches).extract().unwrap();
 
         assert_eq!(
             config.get("host"),
