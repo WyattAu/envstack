@@ -11,12 +11,11 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-envstack = { path = ".." }
-serde = { version = "1", features = ["derive"] }
+envstack = { path = "..", features = ["yaml"] }
 serde_json = "1"
 
 [[bin]]
-name = "fuzz_toml_extract"
-path = "fuzz_targets/fuzz_toml_extract.rs"
+name = "fuzz_parse"
+path = "fuzz_targets/fuzz_parse.rs"
 test = false
 doc = false
