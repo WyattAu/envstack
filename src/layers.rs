@@ -126,7 +126,7 @@ impl TomlLayer {
     }
 
     /// Parse a TOML string directly.
-    pub fn from_str(content: &str) -> Result<Self> {
+    pub fn parse(content: &str) -> Result<Self> {
         let value: toml::Value = toml::from_str(content)?;
         Ok(Self { value })
     }
@@ -192,7 +192,7 @@ impl YamlLayer {
     }
 
     /// Parse a YAML string directly.
-    pub fn from_str(content: &str) -> Result<Self> {
+    pub fn parse(content: &str) -> Result<Self> {
         let value: serde_yaml::Value = serde_yaml::from_str(content)?;
         Ok(Self { value })
     }

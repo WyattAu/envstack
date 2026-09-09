@@ -88,6 +88,9 @@ impl<T> Secret<T> {
     }
 }
 
+/// A validation hook over the merged layer value.
+type ValidatorFn = dyn Fn(&serde_json::Value) -> Result<()>;
+
 /// A stack of configuration layers, merged in priority order.
 ///
 /// Earlier layers take precedence over later ones. Use the builder
@@ -95,7 +98,7 @@ impl<T> Secret<T> {
 /// obtain a typed configuration struct.
 pub struct ConfigStack {
     layers: Vec<Box<dyn Layer>>,
-    validator: Option<Box<dyn Fn(&serde_json::Value) -> Result<()>>>,
+    validator: Option<Box<ValidatorFn>>,
 }
 
 impl Default for ConfigStack {
@@ -167,7 +170,7 @@ impl ConfigStack {
 
     /// Add a raw TOML string as a configuration layer.
     pub fn with_toml_str(mut self, content: &str) -> Result<Self> {
-        let layer = TomlLayer::from_str(content)?;
+        let layer = TomlLayer::parse(content)?;
         self.layers.push(Box::new(layer));
         Ok(self)
     }
@@ -198,7 +201,7 @@ impl ConfigStack {
     /// Add a raw YAML string as a configuration layer.
     #[cfg(feature = "yaml")]
     pub fn with_yaml_str(mut self, content: &str) -> Result<Self> {
-        let layer = YamlLayer::from_str(content)?;
+        let layer = YamlLayer::parse(content)?;
         self.layers.push(Box::new(layer));
         Ok(self)
     }
@@ -385,6 +388,7 @@ fn resolve_json(value: &serde_json::Value, path: &str) -> Option<serde_json::Val
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, dead_code)] // test assertions unwrap by design
     use super::*;
 
     #[test]
@@ -452,7 +456,7 @@ mod tests {
             url = "postgres://localhost/mydb"
             pool_size = 10
         "#;
-        let layer = TomlLayer::from_str(toml_content).unwrap();
+        let layer = TomlLayer::parse(toml_content).unwrap();
         let json = layer.json().unwrap();
 
         let server = json.get("server").unwrap();
@@ -480,7 +484,7 @@ mod tests {
             float_val = 3.14
             bool_val = true
         "#;
-        let layer = TomlLayer::from_str(toml_content).unwrap();
+        let layer = TomlLayer::parse(toml_content).unwrap();
         let json = layer.json().unwrap();
 
         assert!(json.get("string_val").unwrap().is_string());
@@ -768,7 +772,7 @@ mod tests {
 
     #[test]
     fn toml_layer_invalid_syntax() {
-        let result = TomlLayer::from_str("this is not [valid toml");
+        let result = TomlLayer::parse("this is not [valid toml");
         assert!(result.is_err());
     }
 
@@ -960,7 +964,7 @@ mod tests {
         let stack = ConfigStack::new()
             .with_default("string_val", "hello")
             .with_default("int_val", serde_json::json!(42))
-            .with_default("float_val", serde_json::json!(3.14))
+            .with_default("float_val", serde_json::json!(3.5))
             .with_default("bool_val", serde_json::json!(true))
             .with_default("null_val", serde_json::Value::Null)
             .with_default("array_val", serde_json::json!([1, 2, 3]));
@@ -1109,7 +1113,7 @@ mod tests {
             hosts = ["a", "b", "c"]
             ports = [80, 443, 8080]
         "#;
-        let layer = TomlLayer::from_str(toml_content).unwrap();
+        let layer = TomlLayer::parse(toml_content).unwrap();
         let json = layer.json().unwrap();
 
         let hosts = json.get("hosts").unwrap().as_array().unwrap();
@@ -1132,7 +1136,7 @@ mod tests {
             user = "admin"
             password = "secret"
         "#;
-        let layer = TomlLayer::from_str(toml_content).unwrap();
+        let layer = TomlLayer::parse(toml_content).unwrap();
         let json = layer.json().unwrap();
 
         let db = json.get("database").unwrap();
@@ -1149,7 +1153,7 @@ mod tests {
 
     #[test]
     fn toml_layer_name() {
-        let layer = TomlLayer::from_str("key = \"value\"").unwrap();
+        let layer = TomlLayer::parse("key = \"value\"").unwrap();
         assert_eq!(layer.name(), "toml");
     }
 
@@ -1265,7 +1269,7 @@ server:
   host: "0.0.0.0"
   port: 3000
 "#;
-        let layer = layers::YamlLayer::from_str(yaml_content).unwrap();
+        let layer = layers::YamlLayer::parse(yaml_content).unwrap();
         let json = layer.json().unwrap();
 
         let server = json.get("server").unwrap();
@@ -1285,7 +1289,7 @@ int_val: 42
 float_val: 3.14
 bool_val: true
 "#;
-        let layer = layers::YamlLayer::from_str(yaml_content).unwrap();
+        let layer = layers::YamlLayer::parse(yaml_content).unwrap();
         let json = layer.json().unwrap();
 
         assert!(json.get("string_val").unwrap().is_string());
@@ -1297,7 +1301,7 @@ bool_val: true
     #[test]
     #[cfg(feature = "yaml")]
     fn yaml_layer_name() {
-        let layer = layers::YamlLayer::from_str("key: value").unwrap();
+        let layer = layers::YamlLayer::parse("key: value").unwrap();
         assert_eq!(layer.name(), "yaml");
     }
 
@@ -1314,7 +1318,7 @@ ports:
   - 443
   - 8080
 "#;
-        let layer = layers::YamlLayer::from_str(yaml_content).unwrap();
+        let layer = layers::YamlLayer::parse(yaml_content).unwrap();
         let json = layer.json().unwrap();
 
         let hosts = json.get("hosts").unwrap().as_array().unwrap();
@@ -1366,7 +1370,7 @@ ports:
     #[test]
     #[cfg(feature = "yaml")]
     fn yaml_layer_invalid_syntax() {
-        let result = layers::YamlLayer::from_str("invalid: yaml: content: {{");
+        let result = layers::YamlLayer::parse("invalid: yaml: content: {{");
         assert!(result.is_err());
     }
 
