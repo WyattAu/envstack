@@ -1,5 +1,9 @@
 # envstack
 
+[![docs.rs](https://docs.rs/envstack/badge.svg)](https://docs.rs/envstack)
+[![crates.io](https://img.shields.io/crates/v/envstack.svg)](https://crates.io/crates/envstack)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
+
 Layered configuration for Rust — environment variables, TOML files, and CLI args with type-safe extraction and validation.
 
 ## Features
