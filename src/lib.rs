@@ -381,7 +381,16 @@ pub(crate) fn insert_nested(
 fn resolve_json(value: &serde_json::Value, path: &str) -> Option<serde_json::Value> {
     let mut current = value;
     for part in path.split('.') {
-        current = current.get(part)?;
+        current = match current.get(part) {
+            Some(v) => v,
+            // Environment-variable layers store names LOWERCASED
+            // (EnvLayer::json lowercases each segment), so a consumer
+            // querying the natural spelling ("HOSTING_API_TOKEN") must
+            // still resolve. Exact match wins; lowercase is the
+            // documented fallback (SIS round 7, iter 60 — found because
+            // hosting-api's uppercase queries silently resolved None).
+            None => current.get(&part.to_ascii_lowercase())?,
+        };
     }
     Some(current.clone())
 }
