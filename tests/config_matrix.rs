@@ -244,8 +244,14 @@ async fn uppercase_queries_resolve_against_lowercased_env_names() {
     // ConfigStack::get must still resolve the natural spelling.
     let stack = ConfigStack::new().with_env();
     // Any env var this process actually has must resolve in both spells.
-    let probe = std::env::vars().next().map(|(k, _)| k).unwrap_or_else(|| "PATH".to_string());
+    let probe = std::env::vars()
+        .next()
+        .map(|(k, _)| k)
+        .unwrap_or_else(|| "PATH".to_string());
     let upper = probe.to_uppercase();
     let hit = stack.get(&upper).is_some() || stack.get(&probe).is_some();
-    assert!(hit, "env key {upper:?} (or {probe:?}) must resolve through get()");
+    assert!(
+        hit,
+        "env key {upper:?} (or {probe:?}) must resolve through get()"
+    );
 }
