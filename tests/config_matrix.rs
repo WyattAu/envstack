@@ -214,3 +214,25 @@ fn knob_validate_blocks_bad_and_allows_good_config() {
         "validator must allow port = 8080"
     );
 }
+
+// Probe (SIS research loop round 6): uppercase env keys are LOWERCASED by
+// EnvLayer::json() but resolve_json() looks up the exact path — a
+// consumer querying "HOSTING_API_TOKEN" gets None. Found because
+// hosting-api's load_config queried uppercase keys and the API booted
+// with its token silently ignored.
+#[test]
+fn uppercase_env_keys_are_stored_lowercase() {
+    let mut vars = std::collections::HashMap::new();
+    vars.insert("HOSTING_API_TOKEN".to_string(), "tok123".to_string());
+    let layer = envstack::EnvLayer::from_map(vars);
+    use envstack::Layer as _;
+    let json = layer.json().unwrap();
+    assert!(
+        json.get("HOSTING_API_TOKEN").is_none(),
+        "documents the behavior: keys are lowercased on insert"
+    );
+    assert!(
+        json.get("hosting_api_token").is_some(),
+        "the lowercased key is the one that resolves"
+    );
+}
