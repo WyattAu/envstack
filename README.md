@@ -1,4 +1,5 @@
 # envstack
+[![Estate integration](https://github.com/WyattAu/estate-integration/actions/workflows/ci.yml/badge.svg)](https://github.com/WyattAu/estate-integration/actions/workflows/ci.yml)
 
 [![docs.rs](https://docs.rs/envstack/badge.svg)](https://docs.rs/envstack)
 [![crates.io](https://img.shields.io/crates/v/envstack.svg)](https://crates.io/crates/envstack)
