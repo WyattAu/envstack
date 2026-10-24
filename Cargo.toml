@@ -1,9 +1,9 @@
 [package]
 name = "envstack"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 rust-version = "1.85"
-description = "Layered configuration for Rust — environment variables, TOML files, CLI args with type-safe extraction"
+description = "Layered configuration for Rust: environment variables, TOML files, and CLI args with type-safe extraction and validation"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/WyattAu/envstack"
 keywords = ["config", "configuration", "env", "toml", "layered"]
