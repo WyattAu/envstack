@@ -1,16 +1,15 @@
 name: CI
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-  schedule:
-    - cron: "0 6 * * 1"
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+
 jobs:
   quality:
-    uses: WyattAu/engineering-standards/.github/workflows/rust-kit.yml@e344f4c65bcdb6df979c557e25e351626b3cf7f9
+    uses: WyattAu/engineering-standards/.github/workflows/rust-kit.yml@main
     with:
-      tier: c
+      tier: b
       all-features: true
+      loom: false
+      wasm: false
+      miri: false
