@@ -1,6 +1,6 @@
 [package]
 name = "envstack"
-version = "0.2.2"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Layered configuration for Rust: environment variables, TOML files, and CLI args with type-safe extraction and validation"
