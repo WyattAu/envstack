@@ -389,7 +389,7 @@ fn resolve_json(value: &serde_json::Value, path: &str) -> Option<serde_json::Val
             // still resolve. Exact match wins; lowercase is the
             // documented fallback (SIS round 7, iter 60 — found because
             // hosting-api's uppercase queries silently resolved None).
-            None => current.get(&part.to_ascii_lowercase())?,
+            None => current.get(part.to_ascii_lowercase())?,
         };
     }
     Some(current.clone())
